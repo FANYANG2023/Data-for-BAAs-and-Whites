@@ -1,0 +1,62 @@
+library(GSVA)
+library(GSEABase)
+library(dplyr)
+library(tibble)
+library(pheatmap)
+library(limma)
+
+GeneSet <- read.csv("CellReports.txt",header = F,sep = "\t")
+class(GeneSet)
+GeneSet <- GeneSet %>%
+  column_to_rownames("V1")%>%t()
+a <- GeneSet
+Set <- colnames(a)
+
+l <-list()
+for (i in Set) {
+  x <- as.character(a[,i])
+  x <- x[nchar(x)!=0]
+  x <- as.character(x)
+  l[[i]] <- x
+  
+}
+
+
+dat <- read.table("expression-immune infiltration.txt", sep = "\t", header = T)
+rownames(dat) <- dat[, 1]
+dat <- dat[, -1]
+dat <- as.matrix(dat)
+
+
+
+
+ssgsea <- gsva(dat,l,method='ssgsea',kcdf='Gaussian',abs.ranking=TRUE)
+ssgsea.1 <- ssgsea
+for(i in colnames(ssgsea)){
+  #i <- colnames(ssgsea)[1]
+  ssgsea.1[,1] <- (ssgsea[,i] -min(ssgsea[,i]))/(max(ssgsea[,i]) - min(ssgsea[,i]))
+}
+apply(ssgsea.1[,1:6],2,range)
+
+
+group=c(rep("Whites",428),rep("BAAs",41))
+group=as.factor(group)
+annotation_col=data.frame(group=group)
+rownames(annotation_col)=colnames(dat)
+p=pheatmap(
+  ssgsea,
+  border_color = NA,
+  clustering_method = "ward.D2",
+  show_rownames = T,
+  show_colnames = F,
+  labels_row = NULL,
+  cluster_cols = F, # delete this line if want to cluster on columns
+  annotation_col = annotation_col,
+  fontsize_col = 10,
+  cutree_cols = 2
+)
+col_cluster=cutree(p$tree_col,k=2)
+col_cluster
+dev.off()
+
+

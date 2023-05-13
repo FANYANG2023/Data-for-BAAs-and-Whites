@@ -1,0 +1,47 @@
+inputFile="merge_***.txt"                                      
+SNP="genesymbol|snp"
+EXP="genesymbol|exp"
+geneName="genesymbol"
+
+rt=read.table(inputFile,sep="\t",header=T,check.names=F,row.names=1)
+rt1=rt[c(EXP,SNP),]
+rownames(rt1)=c("expression","snp")
+rt=as.data.frame(t(rt1))
+
+xlabel=vector()
+tab1=table(rt[,"snp"])
+labelNum=length(tab1)
+for(i in 1:labelNum){
+  xlabel=c(xlabel,paste(names(tab1[i]),"(n=",tab1[i],")",sep=""))
+}
+
+rt[,1]=as.numeric(as.vector(rt[,1]))
+wilcoxTest<-wilcox.test(expression~snp,data=rt)
+wilcoxP=wilcoxTest$p.value
+pvalue=signif(wilcoxP,4)
+pval=0
+if(pvalue<0.001){
+     pval=signif(pvalue,4)
+     pval=format(pval, scientific = TRUE)
+}else{
+     pval=round(pvalue,3)
+}
+
+b = boxplot(expression ~ snp, data = rt,outline = FALSE, plot=F) 
+yMin=min(b$stats)
+yMax = max(b$stats/5+b$stats)
+ySeg = max(b$stats/10+b$stats)
+ySeg2 = max(b$stats/12+b$stats)
+n = ncol(b$stats)
+
+pdfFile=paste(geneName,".pdf",sep="")
+pdf(file=pdfFile,width=8,height=7)
+par(mar = c(4,7,3,3))
+boxplot(expression ~ snp, data = rt,names=xlabel,
+     ylab = paste(geneName," expression",sep=""),col=c("green","red"),
+     cex.main=1.6, cex.lab=1.4, cex.axis=1.3,ylim=c(yMin,yMax),outline = FALSE)
+segments(1,ySeg, n,ySeg);
+segments(1,ySeg, 1,ySeg2)
+segments(n,ySeg, n,ySeg2)
+text((1+n)/2,ySeg,labels=paste("p=",pval,sep=""),cex=1.5,pos=3)
+dev.off()

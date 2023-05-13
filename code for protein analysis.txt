@@ -1,0 +1,81 @@
+library(limma)
+library(edgeR)
+library(pheatmap)
+
+inputFile="expMatrix.txt"        #?????募?
+fdrFilter=0.05                   #fdr?俳?值
+logFCfilter=2                    
+WhitesFile="sample1.txt"            
+BAAsFile="sample2.txt"          
+
+rt=read.table(inputFile,sep="\t",header=T,check.names=F)
+rt=as.matrix(rt)
+rownames(rt)=rt[,1]
+exp=rt[,2:ncol(rt)]
+dimnames=list(rownames(exp),colnames(exp))
+data=matrix(as.numeric(as.matrix(exp)),nrow=nrow(exp),dimnames=dimnames)
+data=avereps(data)
+data=data[rowMeans(data)>5,]
+
+
+sample1=read.table(conFile,sep="\t",header=F,check.names=F)
+sample1=read.table(treatFile,sep="\t",header=F,check.names=F)
+WhitesData=data[,as.vector(sample1[,1])]
+BAAsData=data[,as.vector(sample2[,1])]
+data=cbind(WhitesData,BAAsData)
+WhitesNum=ncol(WhitesData)
+BAAsNum=ncol(BAAsData)
+
+
+group=c(rep("Whites",WhitesNum),rep("BAAs",BAAsNum))
+design <- model.matrix(~group)
+y <- DGEList(counts=data,group=group)
+y <- calcNormFactors(y)
+y <- estimateCommonDisp(y)
+y <- estimateTagwiseDisp(y)
+et <- exactTest(y,pair = c("Whites","BAAs"))
+ordered_tags <- topTags(et, n=100000)
+
+allDiff=ordered_tags$table
+allDiff=allDiff[is.na(allDiff$FDR)==FALSE,]
+diff=allDiff
+newData=y$pseudo.counts
+
+write.table(diff,file="all.xls",sep="\t",quote=F)
+diffSig = diff[(diff$FDR < fdrFilter & (diff$logFC>logFCfilter | diff$logFC<(-logFCfilter))),]
+diffSigOut=rbind(id=colnames(diffSig),diffSig)
+write.table(diffSigOut, file="diff.xls",sep="\t",quote=F,col.names=F)
+write.table(diffSigOut, file="diff.txt",sep="\t",quote=F,col.names=F)
+
+normalizeExp=rbind(id=colnames(newData),newData)
+write.table(normalizeExp,file="normalizeExp.txt",sep="\t",quote=F,col.names=F)   #???????谢???校?????谋???值
+diffExp=rbind(id=colnames(newData),newData[rownames(diffSig),])
+write.table(diffExp,file="diffGeneExp.txt",sep="\t",quote=F,col.names=F)         #????????????校?????谋???值
+
+geneNum=20
+diffSig=diffSig[order(as.numeric(as.vector(diffSig$logFC))),]
+diffGeneName=as.vector(rownames(diffSig))
+diffLength=length(diffGeneName)
+hmGene=c()
+if(diffLength>(geneNum*2)){
+    hmGene=diffGeneName[c(1:geneNum,(diffLength-geneNum+1):diffLength)]
+}else{
+    hmGene=diffGeneName
+}
+hmExp=newData[hmGene,]
+hmExp=log2(hmExp+0.001)
+Type=c(rep("Con",conNum),rep("Treat",treatNum))
+names(Type)=colnames(newData)
+Type=as.data.frame(Type)
+pdf(file="heatmap.pdf",height=7,width=8)
+pheatmap(hmExp, 
+         annotation=Type, 
+         color = colorRampPalette(c("blue", "white", "red"))(50),
+         cluster_cols = F,
+         show_colnames = F,
+         scale="row",
+         fontsize = 8,
+         fontsize_row= 5,
+         fontsize_col= 8)
+dev.off()
+

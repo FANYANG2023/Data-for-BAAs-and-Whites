@@ -1,0 +1,200 @@
+
+inputFile="geneMethy.txt"               
+WhitesNum=?                          
+BAAsNum=?                            
+fdrFilter=0.05                         
+logFCfilter=1                           
+
+
+library(limma)
+outTab=data.frame()
+grade=c(rep(1,WhitesNum),rep(2,BAAsNum))
+Type=c(rep("Whites",WhitesNum),rep("BAAs",BAAsNum))
+rt=read.table(inputFile,sep="\t",header=T,check.names=F)
+rt=as.matrix(rt)
+rownames(rt)=rt[,1]
+exp=rt[,2:ncol(rt)]
+dimnames=list(rownames(exp),colnames(exp))
+data=matrix(as.numeric(as.matrix(exp)),nrow=nrow(exp),dimnames=dimnames)
+data=avereps(data)
+data=data[rowMeans(data)>0,]
+
+data=normalizeBetweenArrays(data)
+WhitesData=cbind(id=row.names(data),data)
+write.table(WhitesData,file="normalizeMethy.txt",sep="\t",row.names=F,quote=F)
+
+for(i in row.names(data)){
+  rt=rbind(expression=data[i,],grade=grade)
+  rt=as.matrix(t(rt))
+  wilcoxTest<-wilcox.test(expression ~ grade, data=rt)
+
+  WhitesGeneMeans=mean(data[i,1:WhitesNum])
+  BAAsGeneMeans=mean(data[i,(WhitesNum+1):ncol(data)])
+  logFC=log2(BAAsGeneMeans)-log2(WhitesGeneMeans)  
+  pvalue=wilcoxTest$p.value
+  WhitesMed=median(data[i,1:WhitesNum])
+  BAAsMed=median(data[i,(WhitesNum+1):ncol(data)])
+  diffMed=BAAsMed-WhitesMed
+	if( ((logFC>0) & (diffMed>0)) | ((logFC<0) & (diffMed<0)) ){  
+		  outTab=rbind(outTab,
+		               cbind(gene=i,
+		               WhitesMean=WhitesGeneMeans,
+		               BAAsMean=BAAsGeneMeans,
+		               logFC=logFC,
+		               pValue=pvalue))
+	 }
+}
+
+
+pValue=outTab[,"pValue"]
+fdr=p.adjust(as.numeric(as.vector(pValue)),method="fdr")
+outTab=cbind(outTab,fdr=fdr)
+
+write.table(outTab,file="allGene.xls",sep="\t",row.names=F,quote=F)
+
+outDiff=outTab[( abs(as.numeric(as.vector(outTab$logFC)))>logFCfilter & as.numeric(as.vector(outTab$fdr))<fdrFilter),]
+write.table(outDiff,file="diff.xls",sep="\t",row.names=F,quote=F)
+
+methyFile="normalizeMethy.txt"                    
+expFile="normalizeExp.txt"                         
+
+methy = read.table(methyFile, row.names=1 ,header=T,sep="\t",check.names=F)
+RNA = read.table(expFile, row.names=1 ,header=T,sep="\t",check.names=F)
+colnames(methy)=gsub("(.*?)\\-(.*?)\\-(.*?)\\-(.*?)\\-.*","\\1\\-\\2\\-\\3\\-\\4",colnames(methy))
+colnames(RNA)=gsub("(.*?)\\-(.*?)\\-(.*?)\\-(.*?)\\-.*","\\1\\-\\2\\-\\3\\-\\4",colnames(RNA))
+rownames(methy)=paste(rownames(methy),"methy",sep="|")
+rownames(RNA)=paste(rownames(RNA),"exp",sep="|")
+sameSample=intersect(colnames(methy),colnames(RNA))
+merge=rbind(id=sameSample,methy[,sameSample],RNA[,sameSample])
+write.table(merge,file="merge.txt",sep="\t",quote=F,col.names=F)
+
+inputFile="merge.txt"                                   
+methyGene="geneName|methy"                               
+expGene="GeneName|exp"                                   
+
+rt=read.table(inputFile,sep="\t",header=T,check.names=F,row.names=1)
+i=rt[methyGene,]
+j=rt[expGene,]
+x=as.numeric(i)
+y=log2(as.numeric(j)+1)
+corT=cor.test(x,y)
+methyGeneName=unlist(strsplit(methyGene,"\\|",))[1]
+expGeneName=unlist(strsplit(expGene,"\\|",))[1]
+z=lm(y~x)
+cor=corT$estimate
+cor=round(cor,3)
+pvalue=corT$p.value
+pval=signif(pvalue,4)
+pval=format(pval, scientific = TRUE)
+
+outTiff="cor.tiff"
+tiff(file=outTiff,width =15,height = 15,units ="cm",compression="lzw",bg="white",res=300)
+plot(x,y, 
+    type="p",
+    pch=16,
+    main=paste("Cor=",cor," (p-value=",pval,")",sep=""),
+    xlab=paste(methyGeneName,"methylation"),
+    ylab=paste(expGeneName,"expression") )
+lines(x,fitted(z),col=2)
+dev.off()
+
+methyFile="posMethy.txt"                      
+expFile="normalizeExp.txt"                    
+
+methy = read.table(methyFile, row.names=1 ,header=T,sep="\t",check.names=F)
+RNA = read.table(expFile, row.names=1 ,header=T,sep="\t",check.names=F)
+colnames(methy)=gsub("(.*?)\\-(.*?)\\-(.*?)\\-(.*?)\\-.*","\\1\\-\\2\\-\\3\\-\\4",colnames(methy))
+colnames(RNA)=gsub("(.*?)\\-(.*?)\\-(.*?)\\-(.*?)\\-.*","\\1\\-\\2\\-\\3\\-\\4",colnames(RNA))
+rownames(methy)=paste(rownames(methy),"methy",sep="|")
+rownames(RNA)=paste(rownames(RNA),"exp",sep="|")
+sameSample=intersect(colnames(methy),colnames(RNA))
+merge=rbind(id=sameSample,methy[,sameSample],RNA[,sameSample])
+write.table(merge,file="merge.txt",sep="\t",quote=F,col.names=F)
+
+inputFile="merge.txt"                                   
+methyGene="cg****|methy"                               
+expGene="geneName|exp"                                   
+
+rt=read.table(inputFile,sep="\t",header=T,check.names=F,row.names=1)
+i=rt[methyGene,]
+j=rt[expGene,]
+x=as.numeric(i)
+y=log2(as.numeric(j)+1)
+corT=cor.test(x,y)
+methyGeneName=unlist(strsplit(methyGene,"\\|",))[1]
+expGeneName=unlist(strsplit(expGene,"\\|",))[1]
+z=lm(y~x)
+cor=corT$estimate
+cor=round(cor,3)
+pvalue=corT$p.value
+pval=signif(pvalue,4)
+pval=format(pval, scientific = TRUE)
+
+outTiff="posCor.tiff"
+tiff(file=outTiff,width =15,height = 15,units ="cm",compression="lzw",bg="white",res=300)
+plot(x,y, 
+    type="p",
+    pch=16,
+    main=paste("Cor=",cor," (p-value=",pval,")",sep=""),
+    xlab=paste(methyGeneName,"methylation"),
+    ylab=paste(expGeneName,"expression") )
+lines(x,fitted(z),col=2)
+dev.off()
+
+GEfile="GEcancer.txt"
+METfile="METBAAs.txt"
+METNfile="METWhites.txt"
+library("MethylMix")
+
+methyDir="methy"
+corDir="cor"
+dir.create(methyDir)
+dir.create(corDir)
+
+GEcancer = read.table(GEfile, row.names=1, header=T, sep="\t", check.names=T)
+METBAAs = read.table(METfile, row.names=1, header=T, sep="\t", check.names=T)
+METWhites = read.table(METNfile, row.names=1, header=T, sep="\t", check.names=T)
+
+GEcancer=as.matrix(GEcancer)
+METBAAs=as.matrix(METcancer)
+METWhites=as.matrix(METnormal)
+
+MethylMixResults=MethylMix(METBAAs, GEcancer, METWhites)
+
+geneList=read.table("drivenGene.txt",header=F,sep="\t")
+outTab=data.frame()
+for (gene in as.vector(geneList[,1]) ) {
+    x=as.numeric(METBAAs[gene,])
+    y=as.numeric(GEWhites[gene,])
+    corT=cor.test(x,y)
+    z=lm(y~x)
+		cor=corT$estimate
+		cor=round(cor,3)
+		pvalue=corT$p.value
+		if(pvalue<0.001){
+				pval=signif(pvalue,4)
+				pval=format(pval, scientific = TRUE)
+			}else{
+				pval=round(pvalue,3)}
+				
+		 tiffFile=paste(gene,".tiff",sep="")
+		 tiff(file=paste(methyDir,tiffFile,sep="\\"),width = 30, height = 15,
+			    units ="cm",compression="lzw",bg="white",res=600)
+		 plots=MethylMix_PlotModel(gene,MethylMixResults,METBAAs,GEcancer,METWhites)
+	   print(plots$MixtureModelPlot)
+		 dev.off()
+			  
+		 tiffFile=paste(gene,".cor.tiff",sep="")
+		 outTiff=paste(corDir,tiffFile,sep="\\")
+		 tiff(file=outTiff,width =12,height = 12,units ="cm",compression="lzw",bg="white",res=300)
+		 plot(x,y, type="p",pch=16,main=paste("Cor=",cor," (p-value=",pval,")",sep=""),
+					 cex=0.9, cex.lab=1.05, cex.main=1.1,cex.axis=1,    
+					 xlab=paste(gene,"methylation"),
+					ylab=paste(gene,"expression") )
+		lines(x,fitted(z),col=2)
+		dev.off()
+
+
+
+
+

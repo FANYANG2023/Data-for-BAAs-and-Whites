@@ -1,0 +1,12 @@
+snpFile="geneMutation.txt"                            
+expFile="normalizeExp.txt"                            
+
+SNP = read.table(snpFile, row.names=1 ,header=T,sep="\t",check.names=F)
+RNA = read.table(expFile, row.names=1 ,header=T,sep="\t",check.names=F)
+#colnames(SNP)=gsub("(.*?)\\-(.*?)\\-(.*?)\\-(.*?)","\\1\\-\\2\\-\\3\\-\\4",colnames(SNP))
+colnames(RNA)=gsub("(.*?)\\-(.*?)\\-(.*?)\\-(.*?)\\-.*","\\1\\-\\2\\-\\3\\-\\4",colnames(RNA))
+rownames(SNP)=paste(rownames(SNP),"snp",sep="|")
+rownames(RNA)=paste(rownames(RNA),"exp",sep="|")
+sameSample=intersect(colnames(SNP),colnames(RNA))
+merge=rbind(id=sameSample,SNP[,sameSample],RNA[,sameSample])
+write.table(merge,file="merge.txt",sep="\t",quote=F,col.names=F)
